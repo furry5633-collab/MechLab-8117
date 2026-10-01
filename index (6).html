@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover">
+<title>MechLab Simulator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚙️</text></svg>">
+
+<!-- CodeMirror -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+
+<link rel="stylesheet" href="style.css">
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body class="theme-dark">
+<div id="app">
+
+  <!-- ====================== TOPBAR ====================== -->
+  <header id="topbar">
+    <div class="brand">
+      <button id="btnMenuLeft" class="icon-btn mobile-tablet-only" title="Biblioteca de componentes">☰</button>
+      <span class="brand-logo">⚙️</span><span class="brand-text">MechLab <b>Simulator</b></span>
+    </div>
+
+    <div class="toolbar">
+      <div class="btn-group sim-controls">
+        <button id="btnPlay" class="btn btn-play" title="Play"><span class="ico">▶</span><span class="lbl">Play</span></button>
+        <button id="btnPause" class="btn" title="Pausa" disabled><span class="ico">⏸</span><span class="lbl">Pausa</span></button>
+        <button id="btnReset" class="btn" title="Reiniciar"><span class="ico">⟲</span><span class="lbl">Reiniciar</span></button>
+        <select id="speedSelect" title="Velocidad de simulación">
+          <option value="0.25">0.25×</option>
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+        </select>
+      </div>
+
+      <div class="btn-group view-controls hide-sm">
+        <button class="btn btn-sm" data-view="iso" title="Vista isométrica">Iso</button>
+        <button class="btn btn-sm" data-view="top" title="Vista superior">Sup.</button>
+        <button class="btn btn-sm" data-view="front" title="Vista frontal">Front.</button>
+        <button class="btn btn-sm" data-view="side" title="Vista lateral">Lat.</button>
+        <button class="btn btn-sm" id="btnFocus" title="Encuadrar todo">⤢</button>
+      </div>
+
+      <div class="btn-group toggle-controls hide-sm">
+        <button class="btn btn-sm toggle-on" id="btnGrid" title="Mostrar/ocultar rejilla">▦</button>
+        <button class="btn btn-sm toggle-on" id="btnAxes" title="Mostrar/ocultar ejes">✛</button>
+        <button class="btn btn-sm" id="btnWireframe" title="Alambre">◇</button>
+        <button class="btn btn-sm" id="btnValidate" title="Validar circuito">✓ Validar</button>
+      </div>
+
+      <div class="btn-group">
+        <button id="btnTheme" class="icon-btn" title="Cambiar tema claro/oscuro">🌙</button>
+        <button id="btnMenuRight" class="icon-btn mobile-tablet-only" title="Propiedades">🛠️</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ====================== MAIN LAYOUT ====================== -->
+  <div id="main-layout">
+
+    <!-- ---------- LEFT: component library ---------- -->
+    <aside id="library-panel" class="panel">
+      <div class="panel-header">
+        <span>📦 Biblioteca de componentes</span>
+        <button class="icon-btn close-drawer" data-close="library-panel">✕</button>
+      </div>
+      <div class="panel-body">
+        <input type="search" id="librarySearch" placeholder="Buscar componente...">
+        <div id="categoryList" class="category-list"></div>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" data-backdrop="library-panel"></div>
+
+    <!-- ---------- CENTER: 3D viewer + code editor ---------- -->
+    <main id="center-panel">
+      <div class="center-tabs">
+        <button class="center-tab active" data-center-tab="viewer">🧊 Visor 3D</button>
+        <button class="center-tab" data-center-tab="code">💻 Código</button>
+      </div>
+
+      <div id="viewer-wrap" class="center-view active">
+        <div id="viewer3d"></div>
+        <div id="viewerHint" class="viewer-hint">Arrastra un componente de la biblioteca aquí, o tócalo y pulsa "Añadir a la escena".</div>
+        <div id="wiringBanner" class="wiring-banner hidden">🔌 Modo cableado: selecciona el puerto de destino (o pulsa Esc para cancelar)</div>
+      </div>
+
+      <div id="code-wrap" class="center-view">
+        <div class="code-toolbar">
+          <div class="lang-tabs">
+            <button class="lang-tab active" data-lang="cpp">C / C++ (Arduino)</button>
+            <button class="lang-tab" data-lang="python">MicroPython / Python</button>
+            <button class="lang-tab" data-lang="blocks">🧩 Bloques</button>
+          </div>
+          <select id="exampleSelect"><option value="">— Cargar ejemplo —</option></select>
+        </div>
+        <div id="editorHost" class="editor-host"></div>
+        <div id="blocksHost" class="blocks-host hidden"></div>
+      </div>
+    </main>
+
+    <!-- ---------- RIGHT: properties ---------- -->
+    <aside id="properties-panel" class="panel">
+      <div class="panel-header">
+        <span>🛠️ Propiedades</span>
+        <button class="icon-btn close-drawer" data-close="properties-panel">✕</button>
+      </div>
+      <div class="panel-body" id="propertiesBody">
+        <p class="muted">Selecciona un componente en el visor 3D o en la biblioteca para ver sus propiedades.</p>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" data-backdrop="properties-panel"></div>
+  </div>
+
+  <!-- ====================== CONSOLE ====================== -->
+  <footer id="console-panel">
+    <div class="console-header" id="consoleToggle">
+      <div class="console-tabs">
+        <button class="console-tab active" data-console-tab="console">🖥️ Consola</button>
+        <button class="console-tab" data-console-tab="errors">⚠️ Errores <span id="errorCount" class="badge hidden">0</span></button>
+        <button class="console-tab" data-console-tab="serial">📡 Monitor serie</button>
+      </div>
+      <div class="console-actions">
+        <button class="icon-btn" id="btnClearConsole" title="Limpiar">🗑️</button>
+        <button class="icon-btn" id="btnCollapseConsole" title="Minimizar/expandir">▾</button>
+      </div>
+    </div>
+    <div class="console-body">
+      <div class="console-view active" id="view-console"></div>
+      <div class="console-view" id="view-errors"></div>
+      <div class="console-view" id="view-serial"></div>
+    </div>
+  </footer>
+</div>
+
+<!-- ====================== CHIP INFO MODAL ====================== -->
+<div id="chipModal" class="modal hidden">
+  <div class="modal-card">
+    <button class="icon-btn modal-close" id="chipModalClose">✕</button>
+    <div id="chipModalBody"></div>
+  </div>
+</div>
+
+<!-- Scripts: data & simulation primero (globales clásicos), luego módulos ES -->
+<script src="data.js"></script>
+<script src="simulation.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/anyword-hint.min.js"></script>
+
+<script src="examples.js"></script>
+<script src="blocks.js"></script>
+<script type="module" src="main.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a43db2c32c78038d',t:'MTc5MDg4MTEwMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
